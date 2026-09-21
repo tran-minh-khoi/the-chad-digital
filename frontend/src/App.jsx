@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 
-const post = (url, body) =>
-  fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+// Empty in Docker/dev (same-origin /api via nginx or the Vite proxy); set on Vercel to the backend's https URL.
+const API = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+
+const post = (path, body) =>
+  fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 const ARROW = { up: '▲', down: '▼', idle: '–' };
 
@@ -10,7 +13,7 @@ export default function App() {
   const [online, setOnline] = useState(false);
 
   useEffect(() => {
-    const es = new EventSource('/api/events'); // auto-reconnects
+    const es = new EventSource(`${API}/api/events`); // auto-reconnects
     es.onopen = () => setOnline(true);
     es.onerror = () => setOnline(false);
     es.onmessage = (m) => setState(JSON.parse(m.data));

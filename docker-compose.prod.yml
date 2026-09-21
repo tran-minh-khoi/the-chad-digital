@@ -1,0 +1,52 @@
+# VPS deployment: backend + Caddy (HTTPS). The frontend is hosted on Vercel.
+#   cp .env.example .env && edit it, then: docker compose -f docker-compose.prod.yml up -d --build
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  backend:
+    <<: *hardening
+    build: ./backend
+    init: true
+    cap_drop: [ALL]
+    environment:
+      PORT: 3001
+      TICK_MS: ${TICK_MS:-1000}
+      STRATEGY: ${STRATEGY:-nearest}
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN in .env (your Vercel URL)}
+    expose: ["3001"]                # internal only: reachable through Caddy
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging: *logging
+
+  caddy:
+    <<: *hardening
+    image: caddy:2-alpine
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]     # bind 80/443
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env (e.g. api.example.com)}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data            # certificates: keep, or Let's Encrypt rate limits bite on rebuilds
+      - caddy_config:/config
+    mem_limit: 128m
+    depends_on:
+      backend: { condition: service_healthy }
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

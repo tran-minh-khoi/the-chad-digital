@@ -4,8 +4,8 @@ import { once } from 'node:events';
 import { Building } from '../src/Building.js';
 import { createApp } from '../src/app.js';
 
-async function withServer(fn) {
-  const server = createApp(new Building()).listen(0);
+async function withServer(fn, opts) {
+  const server = createApp(new Building(), opts).listen(0);
   await once(server, 'listening');
   try {
     await fn(`http://127.0.0.1:${server.address().port}`);
@@ -68,3 +68,44 @@ test('SSE sends a snapshot immediately', () =>
     assert.match(new TextDecoder().decode(value), /^data: \{"floors":10/);
     await reader.cancel();
   }));
+
+const ORIGIN = 'https://demo.vercel.app';
+
+test('CORS: allowed origin gets headers and preflight passes; others get none', () =>
+  withServer(
+    async (base) => {
+      const get = await fetch(`${base}/api/state`, { headers: { Origin: ORIGIN } });
+      assert.equal(get.headers.get('access-control-allow-origin'), ORIGIN);
+      const pre = await fetch(`${base}/api/call`, {
+        method: 'OPTIONS',
+        headers: { Origin: ORIGIN, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type' },
+      });
+      assert.equal(pre.status, 204);
+      assert.match(pre.headers.get('access-control-allow-headers'), /Content-Type/i);
+      const other = await fetch(`${base}/api/state`, { headers: { Origin: 'https://evil.example' } });
+      assert.equal(other.headers.get('access-control-allow-origin'), null);
+    },
+    { corsOrigins: [ORIGIN] },
+  ));
+
+test('rate limit answers 429 but never throttles /healthz', () =>
+  withServer(
+    async (base) => {
+      const codes = [];
+      for (let i = 0; i < 4; i++) codes.push((await fetch(`${base}/api/state`)).status);
+      assert.deepEqual(codes, [200, 200, 429, 429]);
+      assert.equal((await fetch(`${base}/healthz`)).status, 200);
+    },
+    { rateLimit: { max: 2, windowMs: 60_000 } },
+  ));
+
+test('SSE streams per client are capped', () =>
+  withServer(
+    async (base) => {
+      const first = await fetch(`${base}/api/events`);
+      assert.equal(first.status, 200);
+      assert.equal((await fetch(`${base}/api/events`)).status, 429);
+      await first.body.cancel();
+    },
+    { maxStreamsPerIp: 1 },
+  ));

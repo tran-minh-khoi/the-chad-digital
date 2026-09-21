@@ -1,0 +1,12 @@
+# HTTPS reverse proxy in front of the backend. The certificate is obtained and renewed automatically.
+{$API_DOMAIN} {
+	reverse_proxy backend:3001 {
+		flush_interval -1 # stream Server-Sent Events immediately
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

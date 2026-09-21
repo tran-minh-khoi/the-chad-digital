@@ -17,10 +17,17 @@ if (!Object.hasOwn(strategies, STRATEGY)) {
   throw new Error(`STRATEGY must be one of: ${Object.keys(strategies).join(', ')}`);
 }
 
+const CORS_ORIGIN = (process.env.CORS_ORIGIN ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+for (const o of CORS_ORIGIN) {
+  let ok = false;
+  try { ok = new URL(o).origin === o; } catch { /* invalid URL, reported below */ }
+  if (!ok) throw new Error(`CORS_ORIGIN must be comma-separated origins like https://app.example.com (got "${o}")`);
+}
+
 const building = new Building({ strategy: new strategies[STRATEGY](), log });
 const timer = building.start(TICK_MS);
-const server = createApp(building, { log }).listen(PORT, () =>
-  log(`elevator backend on :${PORT} (strategy=${STRATEGY}, tick=${TICK_MS}ms)`),
+const server = createApp(building, { log, corsOrigins: CORS_ORIGIN }).listen(PORT, () =>
+  log(`elevator backend on :${PORT} (strategy=${STRATEGY}, tick=${TICK_MS}ms, cors=${CORS_ORIGIN.join(',') || 'none'})`),
 );
 
 // PID 1 in a container ignores SIGTERM unless handled; `docker compose down` would wait 10s then SIGKILL.

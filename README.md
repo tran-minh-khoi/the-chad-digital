@@ -64,6 +64,31 @@ Browser ──► nginx :8080 (static React build, reverse proxy) ──/api─�
 | `TICK_MS` | `1000` | ms per step (one floor of travel or one door phase) |
 | `STRATEGY` | `nearest` | `nearest` \| `least-loaded` (unknown value = startup error) |
 | `PORT` | `3001` | backend port (internal) |
+| `CORS_ORIGIN` | none | comma-separated browser origins allowed to call the API (needed when the frontend is on another origin) |
+| `API_DOMAIN` | | VPS only: domain Caddy serves and gets a certificate for |
+
+## Deploy: frontend on Vercel, backend on a VPS
+
+```
+Browser ──► Vercel (static React build)
+   │
+   └──► https://api.<domain> ──► Caddy (auto HTTPS) ──► Node backend (internal)
+```
+
+**VPS** (Docker + Compose installed, ports 80/443 open, DNS `A` record `api.<domain>` → VPS IP):
+
+```bash
+git clone <repo> && cd <repo>
+cp .env.example .env && nano .env            # API_DOMAIN, CORS_ORIGIN
+docker compose -f docker-compose.prod.yml up -d --build
+curl https://api.<domain>/healthz            # {"status":"ok"}
+```
+
+**Vercel:** import the repo, set *Root Directory* to `frontend`, add env var `VITE_API_URL=https://api.<domain>`, deploy.
+Then put the resulting Vercel URL in the VPS `.env` as `CORS_ORIGIN` and run the `up -d` command again.
+(`VITE_*` values are baked into the public JS bundle at build time: never put secrets there. Changing it needs a redeploy.)
+
+Do not import `backend/` into Vercel: the simulation needs one long-running process with in-memory state and SSE.
 
 ## Production hardening
 
@@ -71,7 +96,7 @@ Browser ──► nginx :8080 (static React build, reverse proxy) ──/api─�
 - **Health:** `/healthz` + compose healthchecks; nginx starts only once the backend is healthy.
 - **Shutdown:** SIGTERM/SIGINT handled (`init: true`), so `docker compose down` stops in under a second instead of a 10s SIGKILL.
 - **nginx:** security headers + CSP, no version banner, gzip, `index.html` no-cache and fingerprinted `/assets` cached 1y, rate limit (30 req/s, burst 60, then 429) and max 10 SSE streams per client, Docker DNS re-resolution so a restarted backend is picked up.
-- **Backend:** fail-fast config validation, input validation → JSON 400, JSON 404/500, 1 KB body limit, SSE heartbeat, timestamped event log (`E2 moved 1 -> 2 (up)`, `E2 door open at floor 4`).
+- **Backend:** CORS allow-list, per-IP rate limit (100 req/10 s) and SSE stream cap, fail-fast config validation, input validation → JSON 400, JSON 404/500, 1 KB body limit, SSE heartbeat, timestamped event log (`E2 moved 1 -> 2 (up)`, `E2 door open at floor 4`).
 - **Frontend:** "connection lost" banner while SSE reconnects, `aria-label` on every button.
 - **CI:** GitHub Actions runs the tests and builds the images.
 
