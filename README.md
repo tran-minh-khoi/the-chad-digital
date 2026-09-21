@@ -72,17 +72,27 @@ Browser ──► nginx :8080 (static React build, reverse proxy) ──/api─�
 ```
 Browser ──► Vercel (static React build)
    │
-   └──► https://api.<domain> ──► Caddy (auto HTTPS) ──► Node backend (internal)
+   └──► https://api.<domain> ──► nginx or Caddy (HTTPS) ──► Node backend (127.0.0.1 only)
 ```
 
-**VPS** (Docker + Compose installed, ports 80/443 open, DNS `A` record `api.<domain>` → VPS IP):
+**VPS** (Docker + Compose installed, DNS `A` record `api.<domain>` → VPS IP, DNS-only / no Cloudflare proxy):
 
 ```bash
 git clone <repo> && cd <repo>
-cp .env.example .env && nano .env            # API_DOMAIN, CORS_ORIGIN
-docker compose -f docker-compose.prod.yml up -d --build
-curl https://api.<domain>/healthz            # {"status":"ok"}
+cp .env.example .env && nano .env            # API_DOMAIN, CORS_ORIGIN (origin only: no path, no trailing slash)
 ```
+
+- **A) nginx already owns ports 80/443** (shared VPS): only the backend starts, bound to `127.0.0.1:3101`.
+  Add `deploy/nginx-host.conf` as a *new* nginx site (it only matches its own `server_name`), then `certbot --nginx -d api.<domain>`.
+  ```bash
+  docker compose -f docker-compose.prod.yml up -d --build
+  ```
+- **B) clean VPS**: Caddy also starts and gets the HTTPS certificate by itself.
+  ```bash
+  docker compose -f docker-compose.prod.yml --profile caddy up -d --build
+  ```
+
+Check: `curl https://api.<domain>/healthz` → `{"status":"ok"}`.
 
 **Vercel:** import the repo, set *Root Directory* to `frontend`, add env var `VITE_API_URL=https://api.<domain>`, deploy.
 Then put the resulting Vercel URL in the VPS `.env` as `CORS_ORIGIN` and run the `up -d` command again.

@@ -1,5 +1,10 @@
-# VPS deployment: backend + Caddy (HTTPS). The frontend is hosted on Vercel.
-#   cp .env.example .env && edit it, then: docker compose -f docker-compose.prod.yml up -d --build
+# VPS deployment. The frontend is hosted on Vercel.
+#   cp .env.example .env && edit it, then one of:
+#   - A) a web server (e.g. nginx) already owns ports 80/443: only the backend starts, bound to 127.0.0.1;
+#        put your existing nginx in front of it (see deploy/nginx-host.conf):
+#          docker compose -f docker-compose.prod.yml up -d --build
+#   - B) a clean VPS: also start Caddy, which gets the HTTPS certificate by itself:
+#          docker compose -f docker-compose.prod.yml --profile caddy up -d --build
 x-hardening: &hardening
   restart: unless-stopped
   read_only: true
@@ -20,7 +25,8 @@ services:
       TICK_MS: ${TICK_MS:-1000}
       STRATEGY: ${STRATEGY:-nearest}
       CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN in .env (your Vercel URL)}
-    expose: ["3001"]                # internal only: reachable through Caddy
+    expose: ["3001"]                # reachable by Caddy on the compose network
+    ports: ["127.0.0.1:${BACKEND_PORT:-3101}:3001"]  # host-local only: never exposed to the internet directly
     mem_limit: 256m
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
@@ -33,6 +39,7 @@ services:
   caddy:
     <<: *hardening
     image: caddy:2-alpine
+    profiles: ["caddy"]            # opt-in: skipped when nginx already owns 80/443
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]     # bind 80/443
     environment:
