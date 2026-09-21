@@ -1,0 +1,42 @@
+# Override any ${VAR} below from the shell or a .env file, e.g. `TICK_MS=300 docker compose up`.
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  backend:
+    <<: *hardening
+    build: ./backend
+    init: true                       # forwards signals, reaps zombies
+    environment:
+      PORT: 3001
+      TICK_MS: ${TICK_MS:-1000}      # ms per simulation step (1 floor of travel / 1 door phase)
+      STRATEGY: ${STRATEGY:-nearest} # nearest | least-loaded
+    expose: ["3001"]                 # internal only, reachable through nginx
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  frontend:
+    <<: *hardening
+    build: ./frontend
+    ports: ["8080:8080"]
+    tmpfs: [/tmp]                    # nginx pid/temp files; root fs stays read-only
+    mem_limit: 128m
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging: *logging

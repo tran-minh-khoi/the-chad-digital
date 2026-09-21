@@ -1,0 +1,31 @@
+body { font-family: system-ui, sans-serif; background: #fafafa; margin: 0; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+h1 { text-align: center; }
+.banner { text-align: center; background: #fde8e8; color: #a11; padding: 6px; border-radius: 4px; }
+.status { text-align: center; margin-top: 40px; }
+.grid { display: grid; gap: 8px 24px; justify-content: center; align-items: center; }
+.head { text-align: center; font-weight: 600; }
+.head small { display: block; font-weight: 400; color: #666; }
+
+button { cursor: pointer; border: 0; border-radius: 4px; background: #222; color: #fff; }
+button:disabled { opacity: 0.3; cursor: default; }
+
+.hall { display: flex; gap: 3px; min-width: 55px; justify-content: flex-end; }
+.hall button { width: 26px; height: 22px; font-size: 12px; }
+.hall button.lit { background: #f5a300; color: #000; }
+
+.cell-wrap { display: flex; align-items: center; gap: 6px; }
+.cell { position: relative; width: 64px; height: 44px; background: #fff; color: #222; border: 2px solid #222; }
+.cell b { position: absolute; top: 1px; left: 0; right: 0; font-size: 11px; }
+.cell.selected b { color: #f5a300; }
+.cell.selected { border-color: #f5a300; }
+.cell.here { border-color: #d22; color: #d22; }
+.doors { position: absolute; inset: 16px 8px 0; display: flex; justify-content: center; gap: 0; }
+.doors i { flex: 1; background: transparent; border: 2px solid currentColor; border-bottom: 0; }
+.cell.here .doors i { background: currentColor; opacity: 0.25; }
+.here.door-opening .doors, .here.door-closing .doors { gap: 8px; }
+.here.door-open .doors { gap: 24px; }
+.doors { transition: gap 0.3s; }
+
+.doorbtns { display: flex; flex-direction: column; gap: 2px; }
+.doorbtns button { font-size: 9px; padding: 2px 4px; border-radius: 10px; }
